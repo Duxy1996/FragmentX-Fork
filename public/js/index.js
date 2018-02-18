@@ -1,4 +1,9 @@
+var mouse = new THREE.Vector2();
+var arrow = null;
+var selection = null;
+
 var object = new THREE.Object3D();
+var pieces = [];
 
 var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
@@ -16,6 +21,21 @@ renderer.autoClear = false;
 renderer.setClearColor(0xffffff, 0.0);
 
 $('#editor').append(renderer.domElement);
+
+// raycaster
+raycaster = new THREE.Raycaster();
+
+// selection material
+selectionMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x40e0d0
+                    });
+
+// mousemove
+window.addEventListener( 'mousemove', onmousemove, false );
+function onmousemove(event) {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+};
 
 // camera
 camera.position.z = 15;
@@ -42,13 +62,15 @@ light.position.set(5, 1, 1);
 light.castShadow = true;
 scene.add(light);
 
-this.onWindowResize = function(event) {
+window.addEventListener( 'resize', onWindowResize, false );
+
+function onWindowResize(){
   camera.aspect = window.innerWidth / window.innerHeight;
-  camera.fov = (360 / Math.PI) * Math.atan(tanFOV * (window.innerHeight / windowHeight));
   camera.updateProjectionMatrix();
   camera.lookAt(scene.position);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  return renderer.render(scene, camera);
+  raycaster.setFromCamera(mouse, camera);
+  renderer.render(scene, camera);
 };
 
 this.onMouseMove = function(event) {
@@ -66,10 +88,7 @@ var render = function() {
 render();
 
 var loader = new THREE.PLYLoader();
-var files = ['./models/cake_part01.ply', './models/cake_part02.ply', './models/cake_part03.ply',
-             './models/cake_part04.ply', './models/cake_part05.ply', './models/cake_part06.ply',
-             './models/cake_part07.ply', './models/cake_part08.ply', './models/cake_part09.ply',
-             './models/cake_part10.ply', './models/cake_part11.ply'];
+
 var matrices = [[ 0.4557367861270905, -0.890114426612854, 0, 1.094243168830872,
                   0.8901145458221436, 0.4557368457317352, 0, 0.4239174425601959,
                   0, 0, 1, 0.2033785432577133,
@@ -160,7 +179,7 @@ function set_worker(index){
 
           child.geometry.applyMatrix(scaleMatrix);
           child.geometry.verticesNeedUpdate = true;
-
+          pieces.push(child);
           object.add(child);
         }, false);
 
@@ -170,5 +189,20 @@ function set_worker(index){
         console.log("Sorry, your browser does not support Web Workers...");
     }
 }
+
+renderer.domElement.addEventListener('mousedown', function(event) {
+    var intersects, selected;
+    event.preventDefault();
+    raycaster.setFromCamera(mouse, camera);
+    scene.remove ( arrow );
+    arrow = new THREE.ArrowHelper( raycaster.ray.direction, raycaster.ray.origin, 100, Math.random() * 0xffffff )
+    scene.add( arrow );
+    intersects = raycaster.intersectObjects(pieces);
+    if (intersects.length > 0) {
+      selected = intersects[0].object;
+      selected.material = selectionMaterial;
+      selection = selected;
+    }
+  });
 
 startWorker();
