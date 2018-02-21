@@ -27,8 +27,12 @@ raycaster = new THREE.Raycaster();
 
 // selection material
 selectionMaterial = new THREE.MeshStandardMaterial({
-                    color: 0x40e0d0
-                    });
+    color: 0x40e0d0
+    });
+// normal material
+unselectedMAterial = new THREE.MeshStandardMaterial({
+    color: 0xf4cb42
+    });
 
 // mousemove
 window.addEventListener( 'mousemove', onmousemove, false );
@@ -199,6 +203,9 @@ renderer.domElement.addEventListener('mousedown', function(event) {
     scene.add( arrow );
     intersects = raycaster.intersectObjects(pieces);
     if (intersects.length > 0) {
+      if(selection !== null){
+        selection.material = unselectedMAterial;
+      }
       selected = intersects[0].object;
       selected.material = selectionMaterial;
       selection = selected;
