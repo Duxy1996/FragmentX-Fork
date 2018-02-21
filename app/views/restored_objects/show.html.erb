@@ -3,9 +3,17 @@
   <script type="text/javascript" src="/js/PLYLoader.js"></script>
   <script type="text/javascript" src="/js/OrbitControls.js"></script>
   <script>
-  var object = new THREE.Object3D();
+  var arrow     = null;
+  var selection = null;
+  var mouse     = new THREE.Vector2();
 
-  var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  var object = new THREE.Object3D();
+  var pieces = [];
+
+  var object_f = new THREE.Object3D();
+  var faltants = [];
+
+  var camera    = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
   var renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -14,6 +22,7 @@
 
   var scene = new THREE.Scene();
   scene.add(object);
+  scene.add(object_f);
 
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -21,6 +30,25 @@
   renderer.setClearColor(0xffffff, 0.0);
 
   $('#editor').append(renderer.domElement);
+
+  // raycaster
+  raycaster = new THREE.Raycaster();
+
+  // selection material
+  selectionMaterial = new THREE.MeshStandardMaterial({
+      color: 0x40e0d0
+    });
+  // normal material
+  unselectedMAterial = new THREE.MeshStandardMaterial({
+      color: 0xf4cb42
+    });
+
+  // mousemove
+  window.addEventListener( 'mousemove', onmousemove, false );
+  function onmousemove(event) {
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  };
 
   // camera
   camera.position.z = 15;
@@ -47,13 +75,15 @@
   light.castShadow = true;
   scene.add(light);
 
-  this.onWindowResize = function(event) {
+  window.addEventListener( 'resize', onWindowResize, false );
+
+  function onWindowResize(){
     camera.aspect = window.innerWidth / window.innerHeight;
-    camera.fov = (360 / Math.PI) * Math.atan(tanFOV * (window.innerHeight / windowHeight));
     camera.updateProjectionMatrix();
     camera.lookAt(scene.position);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    return renderer.render(scene, camera);
+    raycaster.setFromCamera(mouse, camera);
+    renderer.render(scene, camera);
   };
 
   this.onMouseMove = function(event) {
@@ -62,10 +92,11 @@
   };
 
   var render = function() {
-      requestAnimationFrame(render);
-      var delta = clock.getDelta();
-      object.rotation.y += delta/4;
-      renderer.render(scene, camera);
+    requestAnimationFrame(render);
+    var delta = clock.getDelta();
+    object.rotation.y += delta/4;
+    object_f.rotation.y += delta/4;
+    renderer.render(scene, camera);
   };
 
   render();
@@ -113,22 +144,42 @@
 
             var scaleMatrix = new THREE.Matrix4();
             var matrix = new THREE.Matrix4();
-            console.log(gon.matrices[index].trim().split(' ').filter(function(val) { return val.length != 0; }));
+            //console.log(gon.matrices[index].trim().split(' ').filter(function(val) { return val.length != 0; }));
             scaleMatrix.fromArray(gon.matrices[index].trim().split(' ').filter(function(val) { return val.length != 0; })).transpose();
             scaleMatrix.multiplyMatrices ( rotate_m, scaleMatrix );
 
             child.geometry.applyMatrix(scaleMatrix);
             child.geometry.verticesNeedUpdate = true;
 
-            object.add(child);
+            if( gon.missings[index] ){
+              pieces.push(child);
+              object.add(child);
+            } else {
+              faltants.push(child);
+              object_f.add(child);
+            }
           }, false);
-          console.log(gon.pieces[index]);
           w[index].postMessage(gon.pieces[index]);
 
       } else {
           console.log("Sorry, your browser does not support Web Workers...");
       }
   }
+
+  renderer.domElement.addEventListener('mousedown', function(event) {
+    var intersects, selected;
+    event.preventDefault();
+    raycaster.setFromCamera(mouse, camera);
+    intersects = raycaster.intersectObjects(pieces.concat(faltants));
+    if (intersects.length > 0) {
+      if(selection !== null){
+        selection.material = unselectedMAterial;
+      }
+      selected = intersects[0].object;
+      selected.material = selectionMaterial;
+      selection = selected;
+    }
+  });
 
   startWorker();
   </script>
