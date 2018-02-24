@@ -8,6 +8,7 @@
                     <li class="icons_column"><button type="button" onclick="allParts()" class="btn btn-primary max_size">All pieces</button></li>
                     <li class="icons_column"><button type="button" onclick="goodParts()" class="btn btn-primary max_size">No missing</button></li>
                     <li class="icons_column"><button type="button" onclick="faltantParts()" class="btn btn-primary max_size">Missing</button></li>
+                    <li class="icons_column"><button type="button" onclick="changeRotationMode()" class="btn btn-primary max_size">Pause</button></li>
                 </ul>
             </div>
         </div>
@@ -15,10 +16,11 @@
         </div>
         <div id="fixed-div">
             <ul>
-                <li class="icons_column" onclick="rule()"><i class="fas fa-camera-retro fa-5x"></i></li>
+                <li class="icons_column" onclick="saveAsImage()"><i class="fas fa-camera-retro fa-5x"></i></li>
                 <li class="icons_column" onclick="rule()"><i class="fas fa-question-circle fa-5x"></i></li>
-                <li class="icons_column" onclick="wireframeSet ()"><i class="fas fa-cube fa-5x"></i></i></li>
-                <li class="icons_column"><i class="far fa-lightbulb fa-5x"></i></li>
+                <li class="icons_column" onclick="wireframeSet()"><i class="fas fa-cube fa-5x"></i></i></li>
+                <li class="icons_column" onclick="addtorch()"><i class="far fa-lightbulb fa-5x"></i></li>
+                <li class="icons_column" onclick="mesure()"><i class="fas fa-arrows-alt-v fa-5x"></i></i></li>
             </ul>
         </div>
         <div id="camera">
@@ -41,9 +43,13 @@
 
   <script>
   //var arrow     = null;
-  var selection = null;
+  var selection     = null;
   var wireframeMode = false;
-  var mouse     = new THREE.Vector2();
+  var torchMode     = false;
+  var rotationMode  = true;
+  var spotLight     = null;
+  var strDownloadMime = "image/octet-stream";
+  var mouse         = new THREE.Vector2();
 
   var object = new THREE.Object3D();
   var pieces = [];
@@ -54,18 +60,40 @@
   var camera    = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
   var renderer = new THREE.WebGLRenderer({
+      preserveDrawingBuffer: true,
       antialias: true,
       alpha: true
   });
 
+  // Spheres of light, world and mesure
+  var geometry = new THREE.SphereGeometry( 5, 32, 32 );
+  var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+  var sphere = new THREE.Mesh( geometry, material );
+
+  var geometry_world = new THREE.SphereGeometry( 100, 32, 32 );
+  var material_world = new THREE.MeshBasicMaterial( {color: 0xffffff, wireframe: true, transparent: true, opacity: 0.0} );
+  var sphere_world = new THREE.Mesh( geometry_world, material_world );
+  sphere_world.material.side = THREE.DoubleSide;
+
+  var geometryMesure = new THREE.SphereGeometry( 0.5, 32, 32 );
+
+  var materialOne = new THREE.MeshBasicMaterial( {color: 0x0000ff} );
+  var sphereOne = new THREE.Mesh( geometryMesure, materialOne );
+  var materialTwo = new THREE.MeshBasicMaterial( {color: 0xff0000} );
+  var sphereTwo = new THREE.Mesh( geometryMesure, materialTwo );
+
   var scene = new THREE.Scene();
   scene.add(object);
   scene.add(object_f);
+  scene.add(sphere_world);
 
+  // render
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.autoClear = false;
+  renderer.autoClear = true;
   renderer.setClearColor(0xffffff, 0.0);
+  renderer.shadowMap.enabled = false;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   $('#editor').append(renderer.domElement);
 
@@ -142,8 +170,10 @@
   var render = function() {
     requestAnimationFrame(render);
     var delta = clock.getDelta();
-    object.rotation.y += delta/4;
-    object_f.rotation.y += delta/4;
+    if(rotationMode){
+      object.rotation.y += delta/4;
+      object_f.rotation.y += delta/4;
+    }
     renderer.render(scene, camera);
   };
 
@@ -162,9 +192,7 @@
   var w = new Array(gon.pieces.length);
 
   function startWorker() {
-      console.log(gon.pieces)
       for(let index = 0; index < gon.pieces.length; index++){
-        console.log(index)
         set_worker(index);
       }
   }
@@ -172,7 +200,6 @@
   function set_worker(index){
       if(typeof(Worker) !== "undefined") {
           w[index] = new Worker('/js/parseModel.js');
-          console.log(index)
           w[index].addEventListener("message", function (event) {
             var abuffer = event.data.buffer;
             var vertices = new Float32Array(abuffer);
@@ -192,7 +219,6 @@
 
             var scaleMatrix = new THREE.Matrix4();
             var matrix = new THREE.Matrix4();
-            //console.log(gon.matrices[index].trim().split(' ').filter(function(val) { return val.length != 0; }));
             scaleMatrix.fromArray(gon.matrices[index].trim().split(' ').filter(function(val) { return val.length != 0; })).transpose();
             scaleMatrix.multiplyMatrices ( rotate_m, scaleMatrix );
 
@@ -234,6 +260,16 @@
         selected = intersects[0].object;
         selected.material = wireframeMaterialSelected;
         selection = selected;
+      }
+    } else {
+      intersects = raycaster.intersectObjects([sphere_world]);
+      console.log( intersects[ 0 ].point );
+      console.log(event.button);
+      if(torchMode & (event.button == 1)) {
+        scene.remove(sphere);
+        sphere.position.set( intersects[ 0 ].point.x , intersects[ 0 ].point.y, intersects[ 0 ].point.z );
+        scene.add(sphere);
+        spotLight.position.set( intersects[ 0 ].point.x, intersects[ 0 ].point.y, intersects[ 0 ].point.z );
       }
     }
   });
@@ -280,6 +316,29 @@
     console.log("Cosas");
   }
 
+  function addtorch(){
+    if(!torchMode) {
+      renderer.shadowMap.enabled = true;
+      spotLight = new THREE.SpotLight( 0xffffff, 1 );
+      spotLight.position.set( 15, 40, 35 );
+      spotLight.angle = Math.PI / 4;
+      spotLight.penumbra = 0.05;
+      spotLight.decay = 2;
+      spotLight.distance = 200;
+      spotLight.castShadow = true;
+      spotLight.shadow.mapSize.width = 1024;
+      spotLight.shadow.mapSize.height = 1024;
+      spotLight.shadow.camera.near = 10;
+      spotLight.shadow.camera.far = 200;
+      scene.add( spotLight );
+    } else{
+      renderer.shadowMap.enabled = false;
+      scene.remove( spotLight );
+      scene.remove( sphere );
+    }
+    torchMode = !torchMode;
+  }
+
   function wireframeSet(){
     var index;
     var allpieces =  pieces.concat(faltants);
@@ -292,5 +351,38 @@
     }
     wireframeMode = !wireframeMode;
   }
+
+  function changeRotationMode() {
+    rotationMode = !rotationMode;
+  }
+
+  function saveAsImage() {
+        var imgData, imgNode;
+
+        try {
+            var strMime = "image/jpeg";
+            imgData = renderer.domElement.toDataURL(strMime);
+
+            saveFile(imgData.replace(strMime, strDownloadMime), "test.jpg");
+
+        } catch (e) {
+            console.log(e);
+            return;
+        }
+
+    }
+
+    var saveFile = function (strData, filename) {
+        var link = document.createElement('a');
+        if (typeof link.download === 'string') {
+            document.body.appendChild(link); //Firefox requires the link to be in the body
+            link.download = filename;
+            link.href = strData;
+            link.click();
+            document.body.removeChild(link); //remove the link when done
+        } else {
+            location.replace(uri);
+        }
+    }
 
   </script>
