@@ -23,8 +23,21 @@ class RestoredObjectsControllerTest < ActionDispatch::IntegrationTest
 
   test "should create restored_object" do
     get  new_restored_object_url
-    #assert_equal 200, status
-    #post restored_objects_url, params: { restored_object:{ title: "can create", description: "article successfully.", user_id: 0, id: 0 } }
+    assert_equal 200, status
+    @user       = User.new
+    @priority   = Priority.new
+    @protection = Protection.new
+    @state      = State.new
+    @units      = Units.new
+    restoredobject = RestoredObject.new(title: 'TEST_TITLE',
+    description: 'TEST_DESCRIPTION')
+    restoredobject.user       = @user
+    restoredobject.priority   = @priority
+    restoredobject.protection = @protection
+    restoredobject.state      = @state
+    restoredobject.units      = @units
+    assert restoredobject.valid?
+    #post restored_objects_url, params:  restoredobject
     #assert_response :redirect
     #follow_redirect!
     #assert_response :success
